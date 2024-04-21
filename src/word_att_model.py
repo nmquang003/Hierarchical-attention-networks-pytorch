@@ -13,7 +13,7 @@ class WordAttNet(nn.Module):
         dict_len, embed_size = dict.shape
         dict_len += 1
         unknown_word = np.zeros((1, embed_size))
-        dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
+        dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float64))
 
         self.word_weight = nn.Parameter(torch.Tensor(2 * hidden_size, 2 * hidden_size))
         self.word_bias = nn.Parameter(torch.Tensor(1, 2 * hidden_size))
@@ -40,5 +40,5 @@ class WordAttNet(nn.Module):
         return output, h_output
 
 
-if __name__ == "__main__":
-    abc = WordAttNet("../data/glove.6B.50d.txt")
+# if __name__ == "__main__":
+#     abc = WordAttNet("../data/glove.6B.50d.txt")
