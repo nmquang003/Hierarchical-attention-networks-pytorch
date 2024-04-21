@@ -1,6 +1,3 @@
-"""
-@author: Viet Nguyen <nhviet1009@gmail.com>
-"""
 import os
 import torch
 import torch.nn as nn
@@ -13,7 +10,7 @@ import argparse
 import shutil
 import numpy as np
 
-
+# getting argments from command line
 def get_args():
     parser = argparse.ArgumentParser(
         """Implementation of the model described in the paper: Hierarchical Attention Networks for Document Classification""")
@@ -36,14 +33,19 @@ def get_args():
     args = parser.parse_args()
     return args
 
-
+# training the model
 def train(opt):
+    # Set random seed for reproducibility
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
+
+    # Create a log file to save training logs
     output_file = open(opt.saved_path + os.sep + "logs.txt", "w")
     output_file.write("Model's parameters: {}".format(vars(opt)))
+
+    # Define DataLoader parameters for training and testing
     training_params = {"batch_size": opt.batch_size,
                        "shuffle": True,
                        "drop_last": True}
@@ -51,16 +53,18 @@ def train(opt):
                    "shuffle": False,
                    "drop_last": False}
 
+    # Get maximum sentence and word lengths from training set
     max_word_length, max_sent_length = get_max_lengths(opt.train_set)
     training_set = MyDataset(opt.train_set, opt.word2vec_path, max_sent_length, max_word_length)
     training_generator = DataLoader(training_set, **training_params)
     test_set = MyDataset(opt.test_set, opt.word2vec_path, max_sent_length, max_word_length)
     test_generator = DataLoader(test_set, **test_params)
 
+    # Create the model
     model = HierAttNet(opt.word_hidden_size, opt.sent_hidden_size, opt.batch_size, training_set.num_classes,
                        opt.word2vec_path, max_sent_length, max_word_length)
 
-
+    # Create a tensorboard writer to log training process
     if os.path.isdir(opt.log_path):
         shutil.rmtree(opt.log_path)
     os.makedirs(opt.log_path)
@@ -70,13 +74,17 @@ def train(opt):
     if torch.cuda.is_available():
         model.cuda()
 
+    # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, momentum=opt.momentum)
     best_loss = 1e5
     best_epoch = 0
+
+    # Training process
     model.train()
     num_iter_per_epoch = len(training_generator)
     for epoch in range(opt.num_epoches):
+        # Training phase
         for iter, (feature, label) in enumerate(training_generator):
             if torch.cuda.is_available():
                 feature = feature.cuda()
@@ -88,6 +96,8 @@ def train(opt):
             loss.backward()
             optimizer.step()
             training_metrics = get_evaluation(label.cpu().numpy(), predictions.cpu().detach().numpy(), list_metrics=["accuracy"])
+            
+            # Log training information
             print("Epoch: {}/{}, Iteration: {}/{}, Lr: {}, Loss: {}, Accuracy: {}".format(
                 epoch + 1,
                 opt.num_epoches,
@@ -97,27 +107,38 @@ def train(opt):
                 loss, training_metrics["accuracy"]))
             writer.add_scalar('Train/Loss', loss, epoch * num_iter_per_epoch + iter)
             writer.add_scalar('Train/Accuracy', training_metrics["accuracy"], epoch * num_iter_per_epoch + iter)
+        
+        # Testing phase
         if epoch % opt.test_interval == 0:
             model.eval()
             loss_ls = []
             te_label_ls = []
             te_pred_ls = []
+
+            # Testing process
             for te_feature, te_label in test_generator:
                 num_sample = len(te_label)
                 if torch.cuda.is_available():
                     te_feature = te_feature.cuda()
                     te_label = te_label.cuda()
+                # Forward pass
                 with torch.no_grad():
                     model._init_hidden_state(num_sample)
                     te_predictions = model(te_feature)
+
+                # Compute loss
                 te_loss = criterion(te_predictions, te_label)
                 loss_ls.append(te_loss * num_sample)
                 te_label_ls.extend(te_label.clone().cpu())
                 te_pred_ls.append(te_predictions.clone().cpu())
+
+            # Compute testing metrics
             te_loss = sum(loss_ls) / test_set.__len__()
             te_pred = torch.cat(te_pred_ls, 0)
             te_label = np.array(te_label_ls)
             test_metrics = get_evaluation(te_label, te_pred.numpy(), list_metrics=["accuracy", "confusion_matrix"])
+            
+            # Log testing information
             output_file.write(
                 "Epoch: {}/{} \nTest loss: {} Test accuracy: {} \nTest confusion matrix: \n{}\n\n".format(
                     epoch + 1, opt.num_epoches,
@@ -142,7 +163,7 @@ def train(opt):
                 print("Stop training at epoch {}. The lowest loss achieved is {}".format(epoch, te_loss))
                 break
 
-
+# main function
 if __name__ == "__main__":
     opt = get_args()
     train(opt)

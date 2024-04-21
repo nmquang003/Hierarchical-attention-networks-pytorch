@@ -1,6 +1,3 @@
-"""
-@author: Viet Nguyen <nhviet1009@gmail.com>
-"""
 import torch
 import sys
 import csv
@@ -71,9 +68,3 @@ if __name__ == "__main__":
     word, sent = get_max_lengths("../data/test.csv")
     print (word)
     print (sent)
-
-
-
-
-
-

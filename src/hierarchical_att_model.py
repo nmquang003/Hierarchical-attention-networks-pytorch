@@ -1,6 +1,3 @@
-"""
-@author: Viet Nguyen <nhviet1009@gmail.com>
-"""
 import torch
 import torch.nn as nn
 from src.sent_att_model import SentAttNet
